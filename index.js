@@ -291,7 +291,7 @@ app.post("/webhook", async (req, res) => {
 
 async function enviarMensaje(to, texto) {
   await axios.post(
-    `https://graph.facebook.com/v18.0/${PHONE_NUMBER_ID}/messages`,
+    `https://graph.facebook.com/v22.0/${PHONE_NUMBER_ID}/messages`,
     { messaging_product: "whatsapp", to, type: "text", text: { body: texto } },
     { headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}`, "Content-Type": "application/json" } }
   );
@@ -299,7 +299,7 @@ async function enviarMensaje(to, texto) {
 
 async function enviarFoto(to, imageUrl, caption) {
   await axios.post(
-    `https://graph.facebook.com/v18.0/${PHONE_NUMBER_ID}/messages`,
+    `https://graph.facebook.com/v22.0/${PHONE_NUMBER_ID}/messages`,
     { messaging_product: "whatsapp", to, type: "image", image: { link: imageUrl, caption } },
     { headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}`, "Content-Type": "application/json" } }
   );
@@ -307,7 +307,7 @@ async function enviarFoto(to, imageUrl, caption) {
 
 async function enviarUbicacion(to) {
   await axios.post(
-    `https://graph.facebook.com/v18.0/${PHONE_NUMBER_ID}/messages`,
+    `https://graph.facebook.com/v22.0/${PHONE_NUMBER_ID}/messages`,
     {
       messaging_product: "whatsapp", to, type: "location",
       location: { longitude: -57.0794, latitude: -37.1017, name: "Las Arenas Pinamar", address: "De las Toninas 24, Pinamar, Buenos Aires, Argentina" }
