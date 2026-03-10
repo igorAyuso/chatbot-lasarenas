@@ -202,6 +202,145 @@ CASOS ESPECIALES → usar [NOTIFICAR_ADMIN]
 - Contrato → "A la brevedad alguien te responde" + [NOTIFICAR_ADMIN]
 - Cualquier duda → "Consulto con el equipo" + [NOTIFICAR_ADMIN]`;
 
+// ═══════════════════════════════════════
+// FUNCIONES DE ENVÍO CON LOGGING MEJORADO
+// ═══════════════════════════════════════
+
+async function enviarMensaje(to, texto) {
+  try {
+    const res = await axios.post(
+      `https://graph.facebook.com/v22.0/${PHONE_NUMBER_ID}/messages`,
+      { messaging_product: "whatsapp", to, type: "text", text: { body: texto } },
+      { headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}`, "Content-Type": "application/json" } }
+    );
+    console.log(`✅ Mensaje enviado a ${to} (${texto.substring(0, 50)}...)`);
+    return res.data;
+  } catch (error) {
+    const errData = error.response?.data?.error || error.response?.data || error.message;
+    console.error(`❌ ERROR enviarMensaje a ${to}:`, JSON.stringify(errData, null, 2));
+    console.error(`   Status: ${error.response?.status}`);
+    console.error(`   Phone ID usado: ${PHONE_NUMBER_ID}`);
+    console.error(`   Token (primeros 20 chars): ${WHATSAPP_TOKEN?.substring(0, 20)}...`);
+    throw error;
+  }
+}
+
+async function enviarFoto(to, imageUrl, caption) {
+  try {
+    const res = await axios.post(
+      `https://graph.facebook.com/v22.0/${PHONE_NUMBER_ID}/messages`,
+      { messaging_product: "whatsapp", to, type: "image", image: { link: imageUrl, caption } },
+      { headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}`, "Content-Type": "application/json" } }
+    );
+    console.log(`✅ Foto enviada a ${to}: ${caption}`);
+    return res.data;
+  } catch (error) {
+    const errData = error.response?.data?.error || error.response?.data || error.message;
+    console.error(`❌ ERROR enviarFoto a ${to} (${caption}):`, JSON.stringify(errData, null, 2));
+    // No lanzar error para que no frene el envío de las demás fotos
+  }
+}
+
+async function enviarUbicacion(to) {
+  try {
+    const res = await axios.post(
+      `https://graph.facebook.com/v22.0/${PHONE_NUMBER_ID}/messages`,
+      {
+        messaging_product: "whatsapp", to, type: "location",
+        location: { longitude: -57.0794, latitude: -37.1017, name: "Las Arenas Pinamar", address: "De las Toninas 24, Pinamar, Buenos Aires, Argentina" }
+      },
+      { headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}`, "Content-Type": "application/json" } }
+    );
+    console.log(`✅ Ubicación enviada a ${to}`);
+    return res.data;
+  } catch (error) {
+    const errData = error.response?.data?.error || error.response?.data || error.message;
+    console.error(`❌ ERROR enviarUbicacion a ${to}:`, JSON.stringify(errData, null, 2));
+  }
+}
+
+async function notificarAdmin_fn(from, nombre, mensaje) {
+  if (!ADMIN_PHONE) return;
+  const aviso = `🔔 *ATENCIÓN REQUERIDA*\n📱 +${from}\n👤 ${nombre || "Sin nombre"}\n💬 "${mensaje}"\n\n👆 Tomar el hilo de esta conversación.`;
+  try {
+    await enviarMensaje(ADMIN_PHONE, aviso);
+    console.log(`✅ Admin notificado sobre ${from}`);
+  } catch (error) {
+    console.error(`❌ ERROR notificando admin sobre ${from}`);
+  }
+}
+
+// ═══════════════════════════════════════
+// ENDPOINTS DE DIAGNÓSTICO
+// ═══════════════════════════════════════
+
+// Health check básico
+app.get("/", (req, res) => {
+  res.json({
+    status: "ok",
+    bot: "Las Arenas Pinamar",
+    timestamp: new Date().toISOString(),
+    config: {
+      phoneNumberId: PHONE_NUMBER_ID ? `...${PHONE_NUMBER_ID.slice(-6)}` : "NO CONFIGURADO",
+      tokenPresent: !!WHATSAPP_TOKEN,
+      tokenLength: WHATSAPP_TOKEN?.length || 0,
+      adminPhone: ADMIN_PHONE ? `...${ADMIN_PHONE.slice(-4)}` : "NO CONFIGURADO",
+      supabaseUrl: process.env.SUPABASE_URL ? "✅" : "❌",
+      anthropicKey: process.env.ANTHROPIC_API_KEY ? "✅" : "❌",
+    }
+  });
+});
+
+// Test de envío de mensaje — GET /test?to=NUMERO
+app.get("/test", async (req, res) => {
+  const to = req.query.to || ADMIN_PHONE;
+  if (!to) return res.status(400).json({ error: "Falta parámetro 'to' o ADMIN_PHONE" });
+
+  console.log(`🧪 TEST: Intentando enviar mensaje a ${to}`);
+  console.log(`   PHONE_NUMBER_ID: ${PHONE_NUMBER_ID}`);
+  console.log(`   TOKEN length: ${WHATSAPP_TOKEN?.length}`);
+  console.log(`   TOKEN primeros 20: ${WHATSAPP_TOKEN?.substring(0, 20)}...`);
+
+  try {
+    const result = await axios.post(
+      `https://graph.facebook.com/v22.0/${PHONE_NUMBER_ID}/messages`,
+      {
+        messaging_product: "whatsapp",
+        to: to,
+        type: "text",
+        text: { body: "🧪 Test desde Las Arenas Bot — si recibís esto, el bot funciona correctamente!" }
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${WHATSAPP_TOKEN}`,
+          "Content-Type": "application/json"
+        }
+      }
+    );
+    console.log(`✅ TEST exitoso:`, JSON.stringify(result.data));
+    res.json({ success: true, response: result.data });
+  } catch (error) {
+    const errDetail = {
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      error: error.response?.data?.error || error.response?.data,
+      message: error.message,
+      config: {
+        phoneNumberId: PHONE_NUMBER_ID,
+        tokenLength: WHATSAPP_TOKEN?.length,
+        tokenStart: WHATSAPP_TOKEN?.substring(0, 20),
+        destinatario: to,
+      }
+    };
+    console.error(`❌ TEST falló:`, JSON.stringify(errDetail, null, 2));
+    res.status(error.response?.status || 500).json({ success: false, detail: errDetail });
+  }
+});
+
+// ═══════════════════════════════════════
+// WEBHOOK
+// ═══════════════════════════════════════
+
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
@@ -275,6 +414,8 @@ app.post("/webhook", async (req, res) => {
       const fotos = FOTOS[unidad].filter((f) => f.url);
       for (const foto of fotos) {
         await enviarFoto(from, foto.url, foto.caption);
+        // Pequeña pausa entre fotos para no saturar la API de Meta
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
       await enviarMensaje(from, `🎥 *Las Arenas Pinamar*\n${videoUrl}`);
     }
@@ -285,42 +426,30 @@ app.post("/webhook", async (req, res) => {
     }
 
   } catch (error) {
-    console.error("❌ Error:", error.message, JSON.stringify(error.response?.data));
+    const errData = error.response?.data?.error || error.response?.data || {};
+    console.error("❌ Error en webhook:");
+    console.error(`   Mensaje: ${error.message}`);
+    console.error(`   Status: ${error.response?.status}`);
+    console.error(`   Detalle API:`, JSON.stringify(errData, null, 2));
+    if (error.response?.status === 400) {
+      console.error("   ⚠️  Error 400 — Posibles causas:");
+      console.error("      1. Token WHATSAPP_TOKEN expirado (duran ~24hs)");
+      console.error("      2. PHONE_NUMBER_ID incorrecto");
+      console.error("      3. Número de destino no registrado en Meta sandbox");
+    }
+    if (error.response?.status === 401) {
+      console.error("   ⚠️  Error 401 — Token inválido o expirado. Regenerar en Meta Developer Console.");
+    }
   }
 });
 
-async function enviarMensaje(to, texto) {
-  await axios.post(
-    `https://graph.facebook.com/v22.0/${PHONE_NUMBER_ID}/messages`,
-    { messaging_product: "whatsapp", to, type: "text", text: { body: texto } },
-    { headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}`, "Content-Type": "application/json" } }
-  );
-}
-
-async function enviarFoto(to, imageUrl, caption) {
-  await axios.post(
-    `https://graph.facebook.com/v22.0/${PHONE_NUMBER_ID}/messages`,
-    { messaging_product: "whatsapp", to, type: "image", image: { link: imageUrl, caption } },
-    { headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}`, "Content-Type": "application/json" } }
-  );
-}
-
-async function enviarUbicacion(to) {
-  await axios.post(
-    `https://graph.facebook.com/v22.0/${PHONE_NUMBER_ID}/messages`,
-    {
-      messaging_product: "whatsapp", to, type: "location",
-      location: { longitude: -57.0794, latitude: -37.1017, name: "Las Arenas Pinamar", address: "De las Toninas 24, Pinamar, Buenos Aires, Argentina" }
-    },
-    { headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}`, "Content-Type": "application/json" } }
-  );
-}
-
-async function notificarAdmin_fn(from, nombre, mensaje) {
-  if (!ADMIN_PHONE) return;
-  const aviso = `🔔 *ATENCIÓN REQUERIDA*\n📱 +${from}\n👤 ${nombre || "Sin nombre"}\n💬 "${mensaje}"\n\n👆 Tomar el hilo de esta conversación.`;
-  await enviarMensaje(ADMIN_PHONE, aviso);
-}
-
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🤖 Chatbot Las Arenas corriendo en puerto ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`🤖 Chatbot Las Arenas corriendo en puerto ${PORT}`);
+  console.log(`   PHONE_NUMBER_ID: ${PHONE_NUMBER_ID}`);
+  console.log(`   Token presente: ${!!WHATSAPP_TOKEN} (${WHATSAPP_TOKEN?.length || 0} chars)`);
+  console.log(`   Admin: ${ADMIN_PHONE}`);
+  console.log(`   Endpoints de diagnóstico:`);
+  console.log(`   GET /       → health check`);
+  console.log(`   GET /test   → enviar mensaje de prueba`);
+});
