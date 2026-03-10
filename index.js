@@ -176,6 +176,7 @@ CLIMATIZACIÓN: AA en living · Estufa tiro balanceado en living · Ventiladores
 
 EXTRAS: Practicuna (reservar al confirmar)
 Sin pileta · Sin gimnasio · Sin lavarropas (hay lavaderos cerca)
+BALNEARIOS: NO tenemos convenio con ningún balneario. Si preguntan, decí que no tenemos convenio pero que hay varios balnearios cerca para elegir.
 
 TERRAZA CON PARRILLA: Hay una terraza con parrilla en el último piso, sin cargo. Se reserva directamente en recepción una vez que el huésped está en la propiedad. NO podés confirmar disponibilidad de la terraza — si preguntan, decí que se coordina en recepción al llegar y que generalmente hay lugar pero no podés garantizarlo desde acá.
 
