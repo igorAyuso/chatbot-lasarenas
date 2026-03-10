@@ -203,10 +203,26 @@ CASOS ESPECIALES → usar [NOTIFICAR_ADMIN]
 - Cualquier duda → "Consulto con el equipo" + [NOTIFICAR_ADMIN]`;
 
 // ═══════════════════════════════════════
+// NORMALIZACIÓN DE NÚMEROS ARGENTINOS
+// ═══════════════════════════════════════
+// WhatsApp webhook envía números AR como 5492254424747 (con 9)
+// pero la API de Meta espera 542254424747 (sin 9)
+function normalizarNumero(phone) {
+  // Si es un número argentino con el 9 (formato 549XXXXXXXXXX)
+  if (phone.startsWith("549") && phone.length === 13) {
+    const sinNueve = "54" + phone.substring(3);
+    console.log(`📱 Número AR normalizado: ${phone} → ${sinNueve}`);
+    return sinNueve;
+  }
+  return phone;
+}
+
+// ═══════════════════════════════════════
 // FUNCIONES DE ENVÍO CON LOGGING MEJORADO
 // ═══════════════════════════════════════
 
 async function enviarMensaje(to, texto) {
+  to = normalizarNumero(to);
   try {
     const res = await axios.post(
       `https://graph.facebook.com/v22.0/${PHONE_NUMBER_ID}/messages`,
@@ -226,6 +242,7 @@ async function enviarMensaje(to, texto) {
 }
 
 async function enviarFoto(to, imageUrl, caption) {
+  to = normalizarNumero(to);
   try {
     const res = await axios.post(
       `https://graph.facebook.com/v22.0/${PHONE_NUMBER_ID}/messages`,
@@ -242,6 +259,7 @@ async function enviarFoto(to, imageUrl, caption) {
 }
 
 async function enviarUbicacion(to) {
+  to = normalizarNumero(to);
   try {
     const res = await axios.post(
       `https://graph.facebook.com/v22.0/${PHONE_NUMBER_ID}/messages`,
