@@ -16,25 +16,29 @@ const ADMIN_PHONE = process.env.ADMIN_PHONE;
 
 let contadorUnidad = 0;
 
+const GITHUB_RAW = "https://raw.githubusercontent.com/igorAyuso/chatbot-lasarenas/main/fotos";
+
 const FOTOS = {
   A: [
-    { url: process.env.FOTO_A_LIVING,      caption: "🛋️ Living / Comedor" },
-    { url: process.env.FOTO_A_LIVING2,     caption: "🛋️ Living / Comedor" },
-    { url: process.env.FOTO_A_COCINA,      caption: "🍳 Cocina" },
-    { url: process.env.FOTO_A_HAB_MATRI,   caption: "🛏️ Habitación matrimonial" },
-    { url: process.env.FOTO_A_HAB_SIMPLES, caption: "🛏️ Habitación camas simples" },
-    { url: process.env.FOTO_A_BANO1,       caption: "🚿 Baño completo" },
-    { url: process.env.FOTO_A_BANO2,       caption: "🚿 Segundo baño" },
+    // Living → Cocina → Habitaciones → Baños
+    { url: `${GITHUB_RAW}/A_living.jpg`,       caption: "🛋️ Living / Comedor" },
+    { url: `${GITHUB_RAW}/A_living2.jpg`,      caption: "🛋️ Living / Comedor" },
+    { url: `${GITHUB_RAW}/A_cocina.jpg`,       caption: "🍳 Cocina" },
+    { url: `${GITHUB_RAW}/A_habitacion1.jpg`,  caption: "🛏️ Habitación matrimonial" },
+    { url: `${GITHUB_RAW}/A_habitacion2.jpg`,  caption: "🛏️ Habitación camas simples" },
+    { url: `${GITHUB_RAW}/A_bano1.jpg`,        caption: "🚿 Baño completo" },
+    { url: `${GITHUB_RAW}/A_bano2.jpg`,        caption: "🚿 Segundo baño" },
   ],
   B: [
-    { url: process.env.FOTO_B_LIVING,      caption: "🛋️ Living / Comedor" },
-    { url: process.env.FOTO_B_LIVING2,     caption: "🛋️ Living / Comedor" },
-    { url: process.env.FOTO_B_COCINA,      caption: "🍳 Cocina" },
-    { url: process.env.FOTO_B_HAB_MATRI,   caption: "🛏️ Habitación matrimonial" },
-    { url: process.env.FOTO_B_HAB_SIMPLES, caption: "🛏️ Habitación camas simples" },
-    { url: process.env.FOTO_B_BANO1,       caption: "🚿 Baño completo" },
-    { url: process.env.FOTO_B_BANO2,       caption: "🚿 Segundo baño" },
-    { url: process.env.FOTO_B_BALCON,      caption: "🌅 Balcón" },
+    // Living → Cocina → Balcón → Habitaciones → Baños
+    { url: `${GITHUB_RAW}/B_living.jpg`,       caption: "🛋️ Living / Comedor" },
+    { url: `${GITHUB_RAW}/B_living2.jpg`,      caption: "🛋️ Living / Comedor" },
+    { url: `${GITHUB_RAW}/B_cocina.jpg`,       caption: "🍳 Cocina" },
+    { url: `${GITHUB_RAW}/B_balcon.jpg`,       caption: "🌅 Balcón" },
+    { url: `${GITHUB_RAW}/B_habitacion1.jpg`,  caption: "🛏️ Habitación matrimonial" },
+    { url: `${GITHUB_RAW}/B_habitacion2.jpg`,  caption: "🛏️ Habitación camas simples" },
+    { url: `${GITHUB_RAW}/B_bano1.jpg`,        caption: "🚿 Baño completo" },
+    { url: `${GITHUB_RAW}/B_bano2.jpg`,        caption: "🚿 Segundo baño" },
   ],
 };
 
@@ -85,38 +89,47 @@ async function upsertConversacion(phone, name, messages, fotoEnviada) {
 }
 
 const SYSTEM_PROMPT = `Sos el asistente virtual de Las Arenas Pinamar, complejo de departamentos turísticos en Pinamar, Argentina.
-Respondé siempre en español argentino con tuteo. Sé amable, cálido y natural — como una persona real, no un robot.
+
+═══════════════════════════════════════
+REGLAS DE TONO Y FORMATO
+═══════════════════════════════════════
+- Hablá en español ARGENTINO real. Usá "vos", "tenés", "querés", "dale", "bárbaro", "genial", "de una", "re lindo", etc. NUNCA uses español neutro ni formal tipo "usted" o "estimado". Soná como una persona real de Argentina que labura en atención al cliente, no como un robot.
+- Sé cálido, cercano y con buena onda, pero siempre respetuoso y profesional.
+- NUNCA seas condescendiente ni hagas comentarios sobre cómo escribe el cliente.
+- Usá formato WhatsApp: *negrita* con un solo asterisco por lado. NUNCA uses **doble asterisco**.
+- Sé breve y directo. No repitas información que ya dijiste.
+- No uses emojis en exceso — máximo 2-3 por mensaje.
+- No hagas listas con viñetas en las respuestas conversacionales — escribí como una persona, en oraciones naturales.
+- Ejemplos de tono correcto: "Hola! Cómo andás?", "Genial! Contame qué fechas tenés pensadas", "Dale, te paso el presupuesto", "Cualquier cosa me escribís!"
+- Ejemplos de tono INCORRECTO (no usar): "Estimado cliente", "Le informamos que", "Quedamos a su disposición", "No dude en contactarnos"
 
 ═══════════════════════════════════════
 SALUDO Y RECOLECCIÓN DE DATOS
 ═══════════════════════════════════════
-Siempre arrancá con "Hola [nombre]! Cómo estás?" usando el nombre del cliente.
-Si el nombre es raro, tiene puntos, símbolos o es incoherente → saludá sin nombre: "Hola! Cómo estás?"
+Arrancá con un saludo natural usando el nombre del cliente, tipo "Hola [nombre]! Cómo andás?" o "Hola [nombre]! Qué tal?"
+Si el nombre es raro, tiene puntos, símbolos o es incoherente → saludá sin nombre: "Hola! Cómo andás?"
 
-Después del saludo, recolectá SOLO lo que falta:
-- Fecha de ingreso (exacta con día y mes)
-- Fecha de salida (exacta con día y mes)
-- Cantidad de personas
-- ¿Vienen en familia o son un grupo de amigos?
+Después del saludo, preguntá de forma natural las fechas y cantidad de personas. Todo en un solo mensaje, conversacional.
+Ejemplo: "Contame, ¿qué fechas tenés pensadas y cuántos vienen?"
+NO preguntes si son familia o amigos.
 
-Si da fechas vagas (ej: "semana santa", "una semana en marzo") → pedí fecha exacta: "¿Me podés dar la fecha exacta? Por ejemplo: ingreso 20/03, salida 24/03"
+Si da fechas vagas (ej: "semana santa", "una semana en marzo") → pedí fecha exacta amablemente: "¿Me pasás la fecha exacta? Por ejemplo: ingreso 20/03, salida 24/03"
 SIEMPRE repreguntá hasta tener fechas concretas.
 
 ═══════════════════════════════════════
 CUANDO TENÉS TODOS LOS DATOS
 ═══════════════════════════════════════
-Una vez que tenés fecha ingreso, fecha salida, cantidad de personas y familia/amigos:
+Una vez que tenés fecha ingreso, fecha salida y cantidad de personas:
 1. Calculá el precio según las tarifas
-2. Respondé con el presupuesto en el formato indicado
+2. NO envíes el presupuesto todavía — solo respondé algo breve como "Perfecto, te preparo el presupuesto!"
 3. Incluí en tu respuesta la palabra clave: [ENVIAR_FOTOS] al final (invisible para el cliente)
+El presupuesto se enviará automáticamente DESPUÉS de las fotos y el video.
 
 ═══════════════════════════════════════
 POLÍTICA DE GRUPOS DE JÓVENES
 ═══════════════════════════════════════
-Si dicen "somos amigos" → preguntar: "Mil disculpas la pregunta, pero necesito consultarte: ¿qué edad tienen?"
-- 17 a 22 años → NO aceptar, explicar amablemente que no disponemos para grupos menores de 23
-- 23+ años → aceptar con +20% al precio. Incluir [NOTIFICAR_ADMIN] en tu respuesta
-- "Somos mayores" sin edad exacta → volver a preguntar
+NO preguntes si son familia o amigos. NO preguntes edad.
+Simplemente incluí la aclaración en el presupuesto (ya está en el formato).
 
 ═══════════════════════════════════════
 CAPACIDAD
@@ -180,13 +193,20 @@ FORMATO PRESUPUESTO
 📅 Salida: [fecha]
 🌙 Noches: [N]
 💵 Precio por noche: USD [X]
-💰 Total: USD [total]
+💰 *Total: USD [total]*
 💳 Seña (50%): USD [seña]
 🏠 Resto al llegar: USD [resto]
 
 🕑 Check-in 14hs · Check-out 10hs
 
 ✅ *Incluye:* Wi-Fi · TV cable + fútbol · Sábanas y toallas · Cochera cubierta[Si temp. alta agregar: · Mucama diaria]
+
+💳 *Formas de pago:* Transferencia · Depósito · Débito · Crédito (1 cuota) · Efectivo en recepción
+💵 En pesos: cotización dólar oficial venta Banco Nación
+
+🐾 *Mascotas bienvenidas* — sin restricción de raza ni tamaño
+
+⚠️ No se aceptan grupos de jóvenes menores de 23 años.
 
 ⚠️ Válido 24hs. No garantiza disponibilidad hasta confirmar con seña.
 
@@ -311,8 +331,9 @@ app.get("/", (req, res) => {
 
 // Test de envío de mensaje — GET /test?to=NUMERO
 app.get("/test", async (req, res) => {
-  const to = req.query.to || ADMIN_PHONE;
+  let to = req.query.to || ADMIN_PHONE;
   if (!to) return res.status(400).json({ error: "Falta parámetro 'to' o ADMIN_PHONE" });
+  to = normalizarNumero(to);
 
   console.log(`🧪 TEST: Intentando enviar mensaje a ${to}`);
   console.log(`   PHONE_NUMBER_ID: ${PHONE_NUMBER_ID}`);
@@ -417,25 +438,48 @@ app.post("/webhook", async (req, res) => {
     const messagesFinales = [...messagesTruncated, { role: "assistant", content: textoRespuesta }];
     await upsertConversacion(from, conv.name, messagesFinales, conv.foto_enviada || enviarFotos);
 
-    // Enviar respuesta de texto primero
-    await enviarMensaje(from, textoRespuesta);
-
     // Si corresponde enviar fotos (y no se enviaron antes)
     if (enviarFotos && !conv.foto_enviada) {
+      // Enviar mensaje breve primero
+      await enviarMensaje(from, textoRespuesta);
+
       contadorUnidad++;
       const unidad = contadorUnidad % 2 === 0 ? "A" : "B";
       const videoUrl = unidad === "A"
         ? "https://youtu.be/4yetwhEtjg0?si=caTNUGU4hFQrgG0M"
         : "https://youtu.be/mrE18Ta90ug?si=F6hYWL3jmRUUKbZx";
 
-      await enviarUbicacion(from);
+      // 1. FOTOS primero
       const fotos = FOTOS[unidad].filter((f) => f.url);
       for (const foto of fotos) {
         await enviarFoto(from, foto.url, foto.caption);
-        // Pequeña pausa entre fotos para no saturar la API de Meta
         await new Promise(resolve => setTimeout(resolve, 500));
       }
-      await enviarMensaje(from, `🎥 *Las Arenas Pinamar*\n${videoUrl}`);
+
+      // 2. UBICACIÓN (link Google Maps)
+      await enviarMensaje(from, `📍 *Ubicación — Las Arenas Pinamar*\nDe las Toninas 24, Pinamar\nhttps://maps.app.goo.gl/adpBkyivjfr3na6F9`);
+
+      // 3. VIDEO
+      await enviarMensaje(from, `🎥 *Video del departamento*\n${videoUrl}`);
+
+      // 4. Esperar unos segundos para que el cliente vea todo
+      await new Promise(resolve => setTimeout(resolve, 4000));
+
+      // 5. PRESUPUESTO — generarlo con los datos de la conversación
+      const presupuestoResp = await anthropic.messages.create({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 1024,
+        system: SYSTEM_PROMPT,
+        messages: [...messagesFinales, { role: "user", content: "[SISTEMA: El cliente ya recibió las fotos, ubicación y video. Ahora generá el presupuesto completo usando el FORMATO PRESUPUESTO con todos los datos que ya tenés. Solo enviá el presupuesto, nada más.]" }],
+      });
+
+      let presupuestoTexto = presupuestoResp.content[0].text;
+      presupuestoTexto = presupuestoTexto.replace(/\[ENVIAR_FOTOS\]/g, "").replace(/\[NOTIFICAR_ADMIN\]/g, "").trim();
+      await enviarMensaje(from, presupuestoTexto);
+
+    } else {
+      // Enviar respuesta normal (sin fotos)
+      await enviarMensaje(from, textoRespuesta);
     }
 
     // Notificar al admin si corresponde
