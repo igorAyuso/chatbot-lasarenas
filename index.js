@@ -482,6 +482,10 @@ app.post("/webhook", async (req, res) => {
       presupuestoTexto = presupuestoTexto.replace(/\*\*(.+?)\*\*/g, "*$1*");
       await enviarMensaje(from, presupuestoTexto);
 
+      // 6. Mensaje de cierre después del presupuesto
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      await enviarMensaje(from, "Cualquier duda o consulta que tengas, escribime sin problema. Estoy acá para lo que necesites!");
+
     } else {
       // Enviar respuesta normal (sin fotos)
       await enviarMensaje(from, textoRespuesta);
