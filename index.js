@@ -76,16 +76,28 @@ function calcularPrecio(fechaIngreso, fechaSalida) {
 }
 
 async function getConversacion(phone) {
-  const { data } = await supabase.from("conversaciones").select("*").eq("phone", phone).single();
+  const { data, error } = await supabase.from("conversaciones").select("*").eq("phone", phone).single();
+  if (error && error.code !== "PGRST116") {
+    // PGRST116 = no rows found (normal para clientes nuevos)
+    console.error(`❌ Error leyendo conversación de ${phone}:`, error.message);
+  }
+  if (data) {
+    console.log(`💾 Conversación recuperada de ${phone}: ${data.messages?.length || 0} mensajes, foto_enviada: ${data.foto_enviada}`);
+  }
   return data;
 }
 
 async function upsertConversacion(phone, name, messages, fotoEnviada) {
-  await supabase.from("conversaciones").upsert({
+  const { error } = await supabase.from("conversaciones").upsert({
     phone, name, messages,
     foto_enviada: fotoEnviada,
     updated_at: new Date().toISOString(),
   });
+  if (error) {
+    console.error(`❌ Error guardando conversación de ${phone}:`, error.message);
+  } else {
+    console.log(`💾 Conversación guardada para ${phone}: ${messages.length} mensajes`);
+  }
 }
 
 const SYSTEM_PROMPT = `Sos Lara, trabajás en la recepción de Las Arenas Pinamar, complejo de departamentos turísticos en Pinamar, Argentina. NUNCA digas que sos un bot, asistente virtual ni inteligencia artificial. Sos Lara, una persona real.
@@ -117,6 +129,8 @@ NO preguntes si son familia o amigos.
 
 Si da fechas vagas (ej: "semana santa", "una semana en marzo") → pedí fecha exacta amablemente: "¿Me pasás la fecha exacta? Por ejemplo: ingreso 20/03, salida 24/03"
 SIEMPRE repreguntá hasta tener fechas concretas.
+
+LLEGADAS DE MADRUGADA: Si el cliente dice algo como "llego el 10 a las 2am" o "llego el viernes de madrugada", interpretá que en realidad viajó la noche anterior y llegó pasadas las 00. Repreguntá para confirmar, por ejemplo: "Ah, ¿llegás el 9 a la noche bien tarde, pasadas las 00? Así lo cuento como noche del 9." Esto cuenta como una noche extra. Usá sentido común con estos casos.
 
 ═══════════════════════════════════════
 CUANDO TENÉS TODOS LOS DATOS
@@ -160,11 +174,26 @@ Check-in: 14hs | Check-out: 10hs
 
 CLIMATIZACIÓN: AA en living · Estufa tiro balanceado en living · Ventiladores y estufas eléctricas disponibles en recepción
 
-EXTRAS: Practicuna (reservar al confirmar) · Terraza con parrilla en último piso (sin cargo, reservar en recepción)
+EXTRAS: Practicuna (reservar al confirmar)
 Sin pileta · Sin gimnasio · Sin lavarropas (hay lavaderos cerca)
 
-MASCOTAS: ✅ Sin restricción de raza ni tamaño
+TERRAZA CON PARRILLA: Hay una terraza con parrilla en el último piso, sin cargo. Se reserva directamente en recepción una vez que el huésped está en la propiedad. NO podés confirmar disponibilidad de la terraza — si preguntan, decí que se coordina en recepción al llegar y que generalmente hay lugar pero no podés garantizarlo desde acá.
+
+═══════════════════════════════════════
+REGLAS DE CONVIVENCIA
+═══════════════════════════════════════
+NO menciones estas reglas de entrada ni en el presupuesto. Solo informá si el cliente pregunta algo relacionado (ej: si puede hacer una fiesta, si puede invitar gente, etc.).
+- No se permite el ingreso de personas que no sean huéspedes.
+- No se permite reproducir música en la terraza ni en las unidades en volúmenes que se escuchen por fuera de la unidad.
+- No se permiten ruidos mayores a 50 dB entre las 00hs y las 08hs.
+- No se permite realizar fiestas.
+Si preguntan por fiestas o juntadas grandes, respondé amablemente que no están permitidas y explicá las reglas de convivencia de forma natural, sin sonar como un reglamento.
+
+MASCOTAS: Se aceptan mascotas sin restricción de raza ni tamaño, dentro de lo razonable (1 o 2 mascotas). Si el cliente dice que trae muchas mascotas (3 o más), respondé amablemente que aceptamos mascotas pero que con esa cantidad necesitás consultarlo con el equipo, y usá [NOTIFICAR_ADMIN]. NO ofrecemos cama ni accesorios para mascotas — si preguntan, decí que no tenemos pero que pueden traer lo que necesiten.
 COCHERA: 1 cubierta incluida · 2 autos → estacionar en la calle (seguro en Pinamar)
+BICICLETAS: Si preguntan por bicicletas, la respuesta es que pueden subirla al departamento o dejarla en la cochera cubierta que tienen asignada, siempre que no ocupe una cochera adicional. NUNCA digas que se puede dejar en la calle ni en la vereda.
+
+IMPORTANTE — NO INVENTAR: Si te preguntan algo que no sabés o que no está en esta información, NO inventes una respuesta. Decí que lo consultás con el equipo y usá [NOTIFICAR_ADMIN]. Es preferible no responder a dar información incorrecta.
 UBICACIÓN: De las Toninas 24, Pinamar · 450m del mar · Restaurantes a 50m · Supermercado enfrente
 
 MUCAMA: Temporada alta (01/12–28/02): diaria incluida · Resto del año: no incluye
@@ -419,7 +448,7 @@ app.post("/webhook", async (req, res) => {
       : texto;
 
     const messages = [...(conv.messages || []), { role: "user", content: mensajeConContexto }];
-    const messagesTruncated = messages.slice(-20);
+    const messagesTruncated = messages.slice(-50);
 
     const respuesta = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
