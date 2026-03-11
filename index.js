@@ -585,6 +585,54 @@ app.post("/webhook", async (req, res) => {
         console.log(`✅ [ADMIN] Conversación de ${clientPhone} reiniciada (${msgCount} mensajes borrados).`);
         return;
       }
+
+      // ═══════════════════════════════════════
+      // PAUSAR CONVERSACIÓN — COMANDO ADMIN
+      // ═══════════════════════════════════════
+      // Formato: PAUSAR:NUMERO_CLIENTE
+      // Pausa la conversación para que el admin pueda atender manualmente.
+      const matchPausar = texto.match(/^PAUSAR:(\d+)/i);
+      if (matchPausar) {
+        const clientPhone = matchPausar[1];
+        console.log(`⏸️ [ADMIN] Pausa solicitada para ${clientPhone}`);
+
+        const clientConv = await getConversacion(clientPhone);
+        if (!clientConv) {
+          await enviarMensaje(from, `❌ No encontré conversación para ${clientPhone}. Verificá el número.`);
+          return;
+        }
+
+        const clientName = clientConv.name || clientPhone;
+        await supabase.from("conversaciones").update({ pausado: true }).eq("phone", clientPhone);
+
+        await enviarMensaje(from, `⏸️ Conversación de *${clientName}* (${clientPhone}) pausada.\n\nEl bot no va a responder hasta que mandes:\n*REACTIVAR:${clientPhone}*`);
+        console.log(`✅ [ADMIN] Conversación de ${clientPhone} pausada.`);
+        return;
+      }
+
+      // ═══════════════════════════════════════
+      // REACTIVAR CONVERSACIÓN — COMANDO ADMIN
+      // ═══════════════════════════════════════
+      // Formato: REACTIVAR:NUMERO_CLIENTE
+      // Reactiva la conversación para que el bot vuelva a responder.
+      const matchReactivar = texto.match(/^REACTIVAR:(\d+)/i);
+      if (matchReactivar) {
+        const clientPhone = matchReactivar[1];
+        console.log(`▶️ [ADMIN] Reactivación solicitada para ${clientPhone}`);
+
+        const clientConv = await getConversacion(clientPhone);
+        if (!clientConv) {
+          await enviarMensaje(from, `❌ No encontré conversación para ${clientPhone}. Verificá el número.`);
+          return;
+        }
+
+        const clientName = clientConv.name || clientPhone;
+        await supabase.from("conversaciones").update({ pausado: false }).eq("phone", clientPhone);
+
+        await enviarMensaje(from, `▶️ Conversación de *${clientName}* (${clientPhone}) reactivada.\n\n🤖 El bot vuelve a responder.`);
+        console.log(`✅ [ADMIN] Conversación de ${clientPhone} reactivada.`);
+        return;
+      }
     }
 
     let conv = await getConversacion(from);
