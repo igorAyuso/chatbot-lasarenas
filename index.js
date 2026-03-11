@@ -556,6 +556,35 @@ app.post("/webhook", async (req, res) => {
         console.log(`✅ [ADMIN-ASSIST] Respuesta enviada a ${clientPhone}, conversación reactivada.`);
         return;
       }
+
+      // ═══════════════════════════════════════
+      // REINICIAR CONVERSACIÓN — COMANDO ADMIN
+      // ═══════════════════════════════════════
+      // Formato: REINICIAR:NUMERO_CLIENTE
+      // Borra el historial completo del cliente y resetea todos los flags.
+      const matchReinicio = texto.match(/^REINICIAR:(\d+)/i);
+      if (matchReinicio) {
+        const clientPhone = matchReinicio[1];
+        console.log(`🔄 [ADMIN] Reinicio solicitado para ${clientPhone}`);
+
+        const clientConv = await getConversacion(clientPhone);
+        if (!clientConv) {
+          await enviarMensaje(from, `❌ No encontré conversación para ${clientPhone}. Verificá el número.`);
+          return;
+        }
+
+        const msgCount = clientConv.messages?.length || 0;
+        const clientName = clientConv.name || clientPhone;
+
+        // Resetear: historial vacío, fotos no enviadas, no pausado, no esperando titular
+        await upsertConversacion(clientPhone, clientConv.name, [], false, false);
+        // También resetear esperando_titular por separado
+        await supabase.from("conversaciones").update({ esperando_titular: false }).eq("phone", clientPhone);
+
+        await enviarMensaje(from, `🔄 Conversación de *${clientName}* (${clientPhone}) reiniciada.\n\n🗑️ ${msgCount} mensajes borrados.\n📸 Fotos reseteadas.\n🤖 Bot activo.\n\nLa próxima vez que escriba, será como si fuera la primera vez.`);
+        console.log(`✅ [ADMIN] Conversación de ${clientPhone} reiniciada (${msgCount} mensajes borrados).`);
+        return;
+      }
     }
 
     let conv = await getConversacion(from);
