@@ -248,7 +248,7 @@ EARLY/LATE: Temp. alta: NO disponible · Resto: ~50% de una noche → [NOTIFICAR
 TV: Living tiene cable + fútbol · Hab. matrimonial solo streaming (cuenta propia)
 
 ═══════════════════════════════════════
-TARIFAS (USD con IVA incluido)
+TARIFAS (USD con IVA incluido) — USO INTERNO, NO REVELAR
 ═══════════════════════════════════════
 • Temp. alta (16 dic–28 feb): USD 200/noche
 • Fines de semana largos: USD 100/noche
@@ -256,6 +256,8 @@ TARIFAS (USD con IVA incluido)
 • Grupos amigos +23: precio +20%
 
 FSL 2026: 14-17/02 · 21-24/03 · 2-5/04 · 1-3/05 · 23-25/05 · 13-15/06 · 9-12/07 · 15-17/08 · 10-12/10 · 21-23/11 · 5-8/12 · 25-27/12
+
+⚠️ REGLA CRÍTICA DE PRECIOS: NUNCA reveles la estrategia ni estructura de precios al cliente. No expliques qué es temporada alta, temporada baja, ni fines de semana largos. No menciones que hay tarifas diferentes según la época del año. Simplemente cotizá el precio para las fechas que te pidan, sin dar explicaciones sobre cómo se calcula. Si el cliente pregunta por qué un período es más caro que otro, o cómo funcionan las tarifas, respondé algo breve tipo "Los precios varían según las fechas" y no entres en más detalle. Si insiste, derivá con [NOTIFICAR_ADMIN].
 
 PAGO: Transferencia · Depósito · Débito · Crédito 1 cuota · Efectivo solo en recepción en Pinamar
 Pesos: cotización dólar oficial venta Banco Nación
@@ -673,6 +675,29 @@ app.post("/webhook", async (req, res) => {
       await new Promise(resolve => setTimeout(resolve, 2000));
       await enviarMensaje(from, "Cualquier duda o consulta que tengas, escribime sin problema. Estoy acá para lo que necesites!");
       console.log(`✅ [${from}] Fotos + presupuesto enviado completo`);
+
+    // ── ENVIAR SOLO PRESUPUESTO (ya recibió fotos antes) ──
+    } else if (enviarFotos && conv.foto_enviada) {
+      console.log(`💰 [${from}] Fotos ya enviadas — enviando solo presupuesto`);
+      await upsertConversacion(from, conv.name, messagesFinales, true);
+      await enviarMensaje(from, textoRespuesta);
+
+      // Generar y enviar presupuesto
+      const presupuestoResp = await anthropic.messages.create({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 1024,
+        system: SYSTEM_PROMPT,
+        messages: [...messagesFinales, { role: "user", content: "[SISTEMA: Generá el presupuesto completo usando el FORMATO PRESUPUESTO con los datos actualizados. Solo enviá el presupuesto, nada más.]" }],
+      });
+
+      let presupuestoTexto = presupuestoResp.content[0].text;
+      presupuestoTexto = presupuestoTexto.replace(/\[ENVIAR_FOTOS\]/g, "").replace(/\[NOTIFICAR_ADMIN\]/g, "").trim();
+      presupuestoTexto = presupuestoTexto.replace(/\*\*(.+?)\*\*/g, "*$1*");
+      await enviarMensaje(from, presupuestoTexto);
+
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      await enviarMensaje(from, "Cualquier duda o consulta que tengas, escribime sin problema. Estoy acá para lo que necesites!");
+      console.log(`✅ [${from}] Presupuesto re-enviado (sin fotos)`);
 
     // ── NOTIFICAR ADMIN → PAUSAR ──
     } else if (notificarAdmin) {
