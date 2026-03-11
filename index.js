@@ -191,7 +191,7 @@ Check-in: 14hs | Check-out: 10hs
 
 CLIMATIZACIÓN: AA en living · Estufa tiro balanceado en living · Ventiladores y estufas eléctricas disponibles en recepción
 
-EXTRAS: Practicuna (reservar al confirmar)
+EXTRAS: Practicuna con sábanas incluidas (reservar al confirmar)
 Sin pileta · Sin gimnasio · Sin lavarropas (hay lavaderos cerca)
 
 ═══════════════════════════════════════
@@ -204,6 +204,8 @@ TOALLAS PARA LA PLAYA: No se pueden llevar las toallas ni ningún objeto del dep
 ASCENSOR: En el ascensor entran máximo 4 personas (300 kg).
 ALCOHOL EN EL BALCÓN: Sí, se puede beber con moderación en las barritas que hay en el balcón.
 FUMAR: No se puede fumar dentro del departamento.
+ESTRELLAS / HOTEL: No somos un hotel, somos un complejo de departamentos tipo apart-hotel, por lo que no tenemos sistema de estrellas. Si preguntan si somos "el hotel Arenas" o "Hotel Las Arenas", aclarar que no, que somos un complejo de departamentos turísticos, no un hotel.
+ANIMACIÓN INFANTIL: No tenemos servicio de animación para niños.
 BALNEARIOS: NO tenemos convenio con ningún balneario. Si preguntan, decí que no tenemos convenio pero que hay varios balnearios cerca para elegir.
 TERRAZA CON PARRILLA: Hay una terraza con parrilla en el último piso, sin cargo. Se reserva directamente en recepción una vez que el huésped está en la propiedad. NO podés confirmar disponibilidad de la terraza — si preguntan, decí que se coordina en recepción al llegar y que generalmente hay lugar pero no podés garantizarlo desde acá.
 
@@ -362,14 +364,21 @@ async function enviarFoto(to, imageUrl, caption) {
   }
 }
 
-async function notificarAdmin_fn(from, nombre, mensaje) {
+async function notificarAdmin_fn(from, nombre, mensaje, tipo = "pregunta") {
   if (!ADMIN_PHONE) {
     console.log(`⚠️ ADMIN_PHONE no configurado — no se puede notificar`);
     return;
   }
-  const aviso = `🔔 *ATENCIÓN REQUERIDA*\n📱 +${from}\n👤 ${nombre || "Sin nombre"}\n💬 "${mensaje}"\n\n👆 Tomar el hilo de esta conversación.`;
+  let aviso;
+  if (tipo === "pregunta") {
+    // Para preguntas que el bot no supo responder — admin puede asistir al bot
+    aviso = `🔔 *CONSULTA — NECESITO AYUDA*\n📱 +${from}\n👤 ${nombre || "Sin nombre"}\n💬 "${mensaje}"\n\n📝 *Respondé:* R:${from} y tu respuesta\n_Ejemplo: R:${from} Sí, tenemos lugar extra_`;
+  } else {
+    // Para reservas, pagos, etc. — admin toma el hilo
+    aviso = `🔔 *ATENCIÓN REQUERIDA*\n📱 +${from}\n👤 ${nombre || "Sin nombre"}\n💬 "${mensaje}"\n\n👆 Tomar el hilo de esta conversación.`;
+  }
   await enviarMensaje(ADMIN_PHONE, aviso);
-  console.log(`✅ Admin notificado sobre ${from}`);
+  console.log(`✅ Admin notificado sobre ${from} (tipo: ${tipo})`);
 }
 
 // ═══════════════════════════════════════
@@ -487,6 +496,60 @@ app.post("/webhook", async (req, res) => {
     console.log(`📩 Tipo: ${message.type}`);
     console.log(`📩 ════════════════════════════════════`);
 
+    // ═══════════════════════════════════════
+    // RESPUESTA DEL ADMIN — ASISTIR AL BOT
+    // ═══════════════════════════════════════
+    // Formato: R:NUMERO_CLIENTE respuesta del admin
+    // El admin responde una consulta que el bot no supo contestar.
+    // El bot toma la respuesta, la reformula naturalmente y reactiva la conversación.
+    const adminNormalizado = ADMIN_PHONE ? normalizarNumero(ADMIN_PHONE) : null;
+    const fromNormalizado = normalizarNumero(from);
+    if (adminNormalizado && fromNormalizado === adminNormalizado && message.type === "text") {
+      const matchR = texto.match(/^R:(\d+)\s+(.+)/is);
+      if (matchR) {
+        const clientPhone = matchR[1];
+        const respuestaAdmin = matchR[2].trim();
+        console.log(`👨‍💼 [ADMIN] Respuesta para ${clientPhone}: ${respuestaAdmin}`);
+
+        // Buscar la conversación del cliente
+        const clientConv = await getConversacion(clientPhone);
+        if (!clientConv) {
+          await enviarMensaje(from, `❌ No encontré conversación para ${clientPhone}. Verificá el número.`);
+          return;
+        }
+
+        // Generar respuesta natural usando la IA con el contexto de Igor
+        const mensajesCliente = clientConv.messages || [];
+        const mensajesConAsistencia = [
+          ...mensajesCliente,
+          { role: "user", content: `[SISTEMA: Igor del equipo te da esta información para que respondas la última consulta del cliente: "${respuestaAdmin}". Usá esta info para responderle al cliente de forma natural, como si vos supieras la respuesta. NO digas "me informaron" ni "me dijeron" — respondé directamente. Sé breve.]` }
+        ];
+
+        const respuestaIA = await anthropic.messages.create({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 1024,
+          system: SYSTEM_PROMPT,
+          messages: mensajesConAsistencia.slice(-50),
+        });
+
+        let textoParaCliente = respuestaIA.content[0].text;
+        textoParaCliente = textoParaCliente.replace(/\[ENVIAR_FOTOS\]/g, "").replace(/\[NOTIFICAR_ADMIN\]/g, "").trim();
+        textoParaCliente = textoParaCliente.replace(/\*\*(.+?)\*\*/g, "*$1*");
+
+        // Enviar al cliente
+        await enviarMensaje(clientPhone, textoParaCliente);
+
+        // Actualizar historial y REACTIVAR la conversación
+        const mensajesFinales = [...mensajesCliente, { role: "assistant", content: textoParaCliente }];
+        await upsertConversacion(clientPhone, clientConv.name, mensajesFinales, clientConv.foto_enviada, false);
+
+        // Confirmar al admin
+        await enviarMensaje(from, `✅ Listo! Le respondí a ${clientConv.name || clientPhone}:\n"${textoParaCliente.substring(0, 150)}${textoParaCliente.length > 150 ? '...' : ''}"\n\n🤖 Bot reactivado para esa conversación.`);
+        console.log(`✅ [ADMIN-ASSIST] Respuesta enviada a ${clientPhone}, conversación reactivada.`);
+        return;
+      }
+    }
+
     let conv = await getConversacion(from);
     if (!conv) {
       console.log(`🆕 Nueva conversación para ${from}`);
@@ -499,7 +562,7 @@ app.post("/webhook", async (req, res) => {
     // ═══════════════════════════════════════
     if (conv.pausado) {
       console.log(`⏸️ [${from}] Conversación PAUSADA — bot no responde. Notificando admin.`);
-      await notificarAdmin_fn(from, conv.name, texto);
+      await notificarAdmin_fn(from, conv.name, texto, "reserva");
       return;
     }
 
@@ -509,7 +572,7 @@ app.post("/webhook", async (req, res) => {
     if (conv.esperando_titular) {
       console.log(`💳 [${from}] Nombre titular recibido: ${texto}`);
       await enviarMensaje(from, "Muchas gracias! A la brevedad alguien del equipo te escribe por este mismo chat para confirmarte la recepción del pago.");
-      await notificarAdmin_fn(from, conv.name, `💳 COMPROBANTE DE PAGO recibido.\nTitular de la reserva: ${texto}`);
+      await notificarAdmin_fn(from, conv.name, `💳 COMPROBANTE DE PAGO recibido.\nTitular de la reserva: ${texto}`, "reserva");
       // Pausar la conversación — a partir de acá solo responde un humano
       const msgs = [...(conv.messages || []), { role: "user", content: texto }, { role: "assistant", content: "Muchas gracias! A la brevedad alguien del equipo te escribe por este mismo chat para confirmarte la recepción del pago." }];
       await upsertConversacion(from, conv.name, msgs, conv.foto_enviada, true);
@@ -524,7 +587,7 @@ app.post("/webhook", async (req, res) => {
     if (message.type === "image") {
       console.log(`📸 [${from}] Imagen recibida — solicitando nombre del titular`);
       await enviarMensaje(from, "Perfecto, recibí el comprobante! Para confirmar, ¿me pasás el *nombre completo del titular de la reserva*?");
-      await notificarAdmin_fn(from, conv.name, "📸 El cliente envió una imagen (posible comprobante de pago). Bot pidió nombre del titular.");
+      await notificarAdmin_fn(from, conv.name, "📸 El cliente envió una imagen (posible comprobante de pago). Bot pidió nombre del titular.", "reserva");
       const msgs = [...(conv.messages || []), { role: "user", content: "[El cliente envió una imagen]" }, { role: "assistant", content: "Perfecto, recibí el comprobante! Para confirmar, ¿me pasás el nombre completo del titular de la reserva?" }];
       await upsertConversacion(from, conv.name, msgs, conv.foto_enviada);
       await supabase.from("conversaciones").update({ esperando_titular: true }).eq("phone", from);
@@ -615,8 +678,10 @@ app.post("/webhook", async (req, res) => {
     } else if (notificarAdmin) {
       await upsertConversacion(from, conv.name, messagesFinales, conv.foto_enviada, true);
       await enviarMensaje(from, textoRespuesta);
-      await notificarAdmin_fn(from, conv.name, texto);
-      console.log(`⏸️ [${from}] Conversación PAUSADA — requiere intervención humana`);
+      // Detectar si es una derivación por reserva/pago o por pregunta que no sabe
+      const esReserva = textoRespuesta.toLowerCase().includes("seña") || textoRespuesta.toLowerCase().includes("coordinar") || textoRespuesta.toLowerCase().includes("pago");
+      await notificarAdmin_fn(from, conv.name, texto, esReserva ? "reserva" : "pregunta");
+      console.log(`⏸️ [${from}] Conversación PAUSADA — tipo: ${esReserva ? "reserva" : "pregunta"}`);
 
     // ── RESPUESTA NORMAL ──
     } else {
