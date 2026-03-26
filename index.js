@@ -807,6 +807,147 @@ app.post("/webhook", async (req, res) => {
   }
 });
 
+// ══════════════════════════════════════════════
+// API ENDPOINTS — DASHBOARD
+// ══════════════════════════════════════════════
+// Estos endpoints alimentan el portal web de administración.
+// Se accede desde el frontend React (dashboard/) directamente.
+//
+// Endpoints:
+//   GET /api/conversaciones         → Lista paginada de conversaciones
+//   GET /api/conversaciones/:phone  → Detalle de una conversación
+//   GET /api/estadisticas           → Métricas generales del bot
+// ══════════════════════════════════════════════
+
+/**
+ * GET /api/conversaciones
+ *
+ * Lista todas las conversaciones, ordenadas por última actualización.
+ *
+ * Query params:
+ *   busqueda (string) — Filtrar por nombre o teléfono
+ *   limite   (number) — Máximo de resultados (default: 50)
+ *   pagina   (number) — Página actual, base 0 (default: 0)
+ *
+ * Respuesta:
+ *   { data: [...], total: number, pagina: number, limite: number }
+ */
+app.get("/api/conversaciones", async (req, res) => {
+  try {
+    const busqueda = req.query.busqueda || "";
+    const limite = parseInt(req.query.limite) || 50;
+    const pagina = parseInt(req.query.pagina) || 0;
+
+    let query = supabase
+      .from("conversaciones")
+      .select("phone, name, foto_enviada, pausado, esperando_titular, updated_at, messages", { count: "exact" })
+      .order("updated_at", { ascending: false })
+      .range(pagina * limite, (pagina + 1) * limite - 1);
+
+    if (busqueda) {
+      query = query.or(`phone.ilike.%${busqueda}%,name.ilike.%${busqueda}%`);
+    }
+
+    const { data, error, count } = await query;
+
+    if (error) throw error;
+
+    res.json({ data: data || [], total: count || 0, pagina, limite });
+  } catch (error) {
+    console.error("❌ Error en /api/conversaciones:", error.message);
+    res.status(500).json({ error: "Error al obtener conversaciones" });
+  }
+});
+
+/**
+ * GET /api/conversaciones/:phone
+ *
+ * Obtiene el detalle completo de una conversación.
+ *
+ * Params:
+ *   phone (string) — Número de teléfono del cliente
+ *
+ * Respuesta:
+ *   { phone, name, messages, foto_enviada, pausado, esperando_titular, updated_at }
+ */
+app.get("/api/conversaciones/:phone", async (req, res) => {
+  try {
+    const { phone } = req.params;
+
+    const { data, error } = await supabase
+      .from("conversaciones")
+      .select("*")
+      .eq("phone", phone)
+      .single();
+
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: "Conversación no encontrada" });
+
+    res.json(data);
+  } catch (error) {
+    console.error("❌ Error en /api/conversaciones/:phone:", error.message);
+    res.status(500).json({ error: "Error al obtener conversación" });
+  }
+});
+
+/**
+ * GET /api/estadisticas
+ *
+ * Calcula y devuelve métricas generales del bot.
+ *
+ * Respuesta:
+ *   {
+ *     totalConversaciones, conversacionesActivas, conversacionesPausadas,
+ *     fotoEnviada, esperandoTitular,
+ *     mensajesTotales, mensajesEnviados, mensajesRecibidos, promedioMensajes,
+ *     conversacionesHoy, conversacionesSemana, conversacionesMes
+ *   }
+ */
+app.get("/api/estadisticas", async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("conversaciones")
+      .select("*");
+
+    if (error) throw error;
+
+    const conversaciones = data || [];
+    const ahora = new Date();
+    const hoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+    const hace7Dias = new Date(hoy.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const hace30Dias = new Date(hoy.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    let mensajesTotales = 0, mensajesEnviados = 0, mensajesRecibidos = 0;
+    conversaciones.forEach(c => {
+      const msgs = Array.isArray(c.messages) ? c.messages : [];
+      mensajesTotales += msgs.length;
+      mensajesEnviados += msgs.filter(m => m.role === "assistant").length;
+      mensajesRecibidos += msgs.filter(m => m.role === "user").length;
+    });
+
+    res.json({
+      totalConversaciones: conversaciones.length,
+      conversacionesActivas: conversaciones.filter(c => !c.pausado).length,
+      conversacionesPausadas: conversaciones.filter(c => c.pausado).length,
+      fotoEnviada: conversaciones.filter(c => c.foto_enviada).length,
+      esperandoTitular: conversaciones.filter(c => c.esperando_titular).length,
+      mensajesTotales,
+      mensajesEnviados,
+      mensajesRecibidos,
+      promedioMensajes: conversaciones.length > 0 ? Math.round(mensajesTotales / conversaciones.length) : 0,
+      conversacionesHoy: conversaciones.filter(c => new Date(c.updated_at) >= hoy).length,
+      conversacionesSemana: conversaciones.filter(c => new Date(c.updated_at) >= hace7Dias).length,
+      conversacionesMes: conversaciones.filter(c => new Date(c.updated_at) >= hace30Dias).length
+    });
+  } catch (error) {
+    console.error("❌ Error en /api/estadisticas:", error.message);
+    res.status(500).json({ error: "Error al obtener estadísticas" });
+  }
+});
+
+// ══════════════════════════════════════════════
+// INICIO DEL SERVIDOR
+// ══════════════════════════════════════════════
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`\n🤖 ════════════════════════════════════`);
