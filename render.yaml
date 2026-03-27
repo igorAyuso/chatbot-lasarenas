@@ -1,0 +1,51 @@
+# =============================================
+# RENDER BLUEPRINT — LAS ARENAS PINAMAR
+# =============================================
+# Este archivo configura automáticamente los servicios en Render.
+# Para usarlo: Render > New > Blueprint > Seleccionar este repo
+# Render lee este archivo y crea todo automáticamente.
+# =============================================
+
+services:
+  # --- BACKEND: Bot de WhatsApp ---
+  - type: web
+    name: chatbot-lasarenas
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node index.js
+    envVars:
+      - key: WHATSAPP_TOKEN
+        sync: false  # Se configura manualmente en Render
+      - key: PHONE_NUMBER_ID
+        sync: false
+      - key: VERIFY_TOKEN
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ADMIN_PHONE
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+
+  # --- DASHBOARD: Portal de administración ---
+  - type: web
+    name: lasarenas-dashboard
+    runtime: static
+    plan: free
+    rootDir: dashboard
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_KEY
+        sync: false
+      - key: VITE_DASHBOARD_PASSWORD
+        sync: false
